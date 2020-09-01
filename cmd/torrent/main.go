@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/anacrolix/missinggo"
 	"github.com/dustin/go-humanize"
@@ -26,7 +27,74 @@ import (
 	"github.com/anacrolix/torrent/iplist"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/anacrolix/torrent/tracker"
+
+	"github.com/godbus/dbus/v5"
+	"github.com/godbus/dbus/v5/introspect"
+	"encoding/json"
 )
+
+type BTDownloadDbus struct{
+	Torr *torrent.Torrent
+}
+
+func JsonToString(resp map[string]interface{}) string {
+	data, err := json.Marshal(resp)
+	if err != nil {
+		return ""
+	}
+	return *(*string)(unsafe.Pointer(&data))
+}
+
+func (btDbus *BTDownloadDbus) GetBtProgress() string {
+	if btDbus.Torr == nil {
+		return ""
+	}
+	bytesCompleted := uint64(btDbus.Torr.BytesCompleted() )
+	length := uint64(btDbus.Torr.Length())
+
+	resp := make(map[string]interface{})
+	resp["progress"] = 0.0
+	resp["finish"] = false
+	
+	mbsCompleted := float64(bytesCompleted / (1000 * 1000))
+	mbsLength := float64(length / (1000 * 1000))
+	if mbsLength != 0 {
+		resp["progress"] = float32(mbsCompleted / mbsLength)
+	} else if length != 0{
+		resp["progress"] = float32(bytesCompleted) / float32(length)
+	}
+
+	if bytesCompleted == length {
+		resp["finish"] = true
+	}
+	
+	return JsonToString(resp)
+
+}
+
+func announceErr(args []string, parent *tagflag.Parser) error {
+        var flags struct {
+                tagflag.StartPos
+                Tracker  string
+                InfoHash torrent.InfoHash
+        }
+        tagflag.ParseArgs(&flags, args, tagflag.Parent(parent))
+        response, err := tracker.Announce{
+                TrackerUrl: flags.Tracker,
+                Request: tracker.AnnounceRequest{
+                        InfoHash: flags.InfoHash,
+                        Port:     uint16(torrent.NewDefaultClientConfig().ListenPort),
+                },
+        }.Do()
+        if err != nil {
+                return fmt.Errorf("doing announce: %w", err)
+        }
+        spew.Dump(response)
+        return nil
+}
 
 func torrentBar(t *torrent.Torrent, pieceStates bool) {
 	go func() {
@@ -71,6 +139,8 @@ type stringAddr string
 
 func (stringAddr) Network() string   { return "" }
 func (me stringAddr) String() string { return string(me) }
+
+var gBtDbus  *BTDownloadDbus
 
 func resolveTestPeers(addrs []string) (ret []torrent.PeerInfo) {
 	for _, ta := range flags.TestPeer {
@@ -125,7 +195,11 @@ func addTorrents(client *torrent.Client) error {
 		if err != nil {
 			return xerrors.Errorf("adding torrent for %q: %w", arg, err)
 		}
+		if gBtDbus != nil {
+			gBtDbus.Torr = t
+		}
 		if flags.Progress {
+			fmt.Println("progress")
 			torrentBar(t, flags.PieceStates)
 		}
 		t.AddPeers(testPeers)
@@ -166,6 +240,7 @@ var flags = struct {
 
 	Torrent []string `arity:"+" help:"torrent file path or magnet uri"`
 }{
+	Seed:		  true,
 	UploadRate:   -1,
 	DownloadRate: -1,
 	Progress:     true,
@@ -209,7 +284,32 @@ func main() {
 	}
 }
 
+const intro = `
+<node>
+	<interface name="com.gsidv.btdownload">
+		<method name="GetBtProgress">
+			<arg direction="out" type="string"/>
+		</method>
+	</interface>` + introspect.IntrospectDataString + `</node> `
+
 func mainErr() error {
+	conn, err := dbus.SessionBus()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	gBtDbus = &BTDownloadDbus{}
+	fmt.Println("mainErr",gBtDbus)
+	conn.ExportAll(gBtDbus, "/com/gsidv/btdownload", "com.gsidv.btdownload")
+	conn.Export(introspect.Introspectable(intro), "/com/gsidv/btdownload",
+		"org.freedesktop.DBus.Introspectable")
+
+	_, err = conn.RequestName("com.gsidv.btdownload",
+		dbus.NameFlagDoNotQueue)
+	if err != nil {
+		return err
+	}
+
 	var flags struct {
 		tagflag.StartPos
 		Command string
@@ -286,6 +386,7 @@ func downloadErr(args []string, parent *tagflag.Parser) error {
 	// Write status on the root path on the default HTTP muxer. This will be bound to localhost
 	// somewhere if GOPPROF is set, thanks to the envpprof import.
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		fmt.Println("handle http")
 		client.WriteStatus(w)
 	})
 	addTorrents(client)
@@ -309,5 +410,6 @@ func outputStats(cl *torrent.Client) {
 	expvar.Do(func(kv expvar.KeyValue) {
 		fmt.Printf("%s: %s\n", kv.Key, kv.Value)
 	})
+	fmt.Println("outputStats")
 	cl.WriteStatus(os.Stdout)
 }

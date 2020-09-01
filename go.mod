@@ -23,6 +23,7 @@ require (
 	github.com/elliotchance/orderedmap v1.2.2
 	github.com/frankban/quicktest v1.9.0
 	github.com/fsnotify/fsnotify v1.4.9
+	github.com/godbus/dbus/v5 v5.0.3 // indirect
 	github.com/google/btree v1.0.0
 	github.com/gorilla/websocket v1.4.2
 	github.com/jessevdk/go-flags v1.4.0
