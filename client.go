@@ -1146,6 +1146,15 @@ func (cl *Client) AddTorrentSpec(spec *TorrentSpec) (t *Torrent, new bool, err e
 	return
 }
 
+// Add or merge a torrent spec. Returns new if the torrent wasn't already in the client. See also
+// Torrent.MergeSpec.
+func (cl *Client) AddTorrentSpecSaveAs(spec *TorrentSpec, saveas string) (t *Torrent, new bool, err error) {
+	t, new = cl.AddTorrentInfoHashWithStorage(spec.InfoHash, spec.Storage)
+	t.SetSaveAsName(saveas)
+	err = t.MergeSpec(spec)
+	return
+}
+
 // The trackers will be merged with the existing ones. If the Info isn't yet known, it will be set.
 // spec.DisallowDataDownload/Upload will be read and applied
 // The display name is replaced if the new spec provides one. Note that any `Storage` is ignored.
@@ -1285,6 +1294,11 @@ func (cl *Client) AddMagnet(uri string) (T *Torrent, err error) {
 
 func (cl *Client) AddTorrent(mi *metainfo.MetaInfo) (T *Torrent, err error) {
 	T, _, err = cl.AddTorrentSpec(TorrentSpecFromMetaInfo(mi))
+	return
+}
+
+func (cl *Client) AddTorrentSaveAs(mi *metainfo.MetaInfo, saveas string) (T *Torrent, err error) {
+	T, _, err = cl.AddTorrentSpecSaveAs(TorrentSpecFromMetaInfo(mi), saveas)
 	return
 }
 

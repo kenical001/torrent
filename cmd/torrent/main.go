@@ -185,7 +185,12 @@ func addTorrents(client *torrent.Client) error {
 				if err != nil {
 					return nil, xerrors.Errorf("error loading torrent file %q: %s\n", arg, err)
 				}
-				t, err := client.AddTorrent(metaInfo)
+				var t *torrent.Torrent
+				if flags.SaveAsName == "" {
+					t, err = client.AddTorrent(metaInfo)
+				} else {
+					t, err = client.AddTorrentSaveAs(metaInfo, flags.SaveAsName)
+				}
 				if err != nil {
 					return nil, xerrors.Errorf("adding torrent: %w", err)
 				}
@@ -236,9 +241,12 @@ var flags = struct {
 	Ipv6 bool
 	Pex  bool
 
+	SaveAsName		string	`help:"save download file as name"`
+
 	tagflag.StartPos
 
 	Torrent []string `arity:"+" help:"torrent file path or magnet uri"`
+	
 }{
 	Seed:		  true,
 	UploadRate:   -1,

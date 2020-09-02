@@ -112,6 +112,8 @@ type Torrent struct {
 	nameMu      sync.RWMutex
 	displayName string
 
+	saveAsName	string
+
 	// The bencoded bytes of the info dict. This is actively manipulated if
 	// the info bytes aren't initially available, and we try to fetch them
 	// from peers.
@@ -386,6 +388,9 @@ func (t *Torrent) cacheLength() {
 }
 
 func (t *Torrent) setInfo(info *metainfo.Info) error {
+	if t.saveAsName != "" && info != nil{
+		info.Name = t.saveAsName
+	}
 	if err := validateInfo(info); err != nil {
 		return fmt.Errorf("bad info: %s", err)
 	}
@@ -396,6 +401,7 @@ func (t *Torrent) setInfo(info *metainfo.Info) error {
 			return fmt.Errorf("error opening torrent storage: %s", err)
 		}
 	}
+
 	t.nameMu.Lock()
 	t.info = info
 	t.nameMu.Unlock()
@@ -436,6 +442,8 @@ func (t *Torrent) setInfoBytes(b []byte) error {
 	if err := bencode.Unmarshal(b, &info); err != nil {
 		return fmt.Errorf("error unmarshalling info bytes: %s", err)
 	}
+
+	
 	t.metadataBytes = b
 	t.metadataCompletedChunks = nil
 	if t.info != nil {
