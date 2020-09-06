@@ -1292,6 +1292,15 @@ func (cl *Client) AddMagnet(uri string) (T *Torrent, err error) {
 	return
 }
 
+func (cl *Client) AddMagnetSaveAs(uri string, saveas string) (T *Torrent, err error) {
+	spec, err := TorrentSpecFromMagnetURI(uri)
+	if err != nil {
+		return
+	}
+	T, _, err = cl.AddTorrentSpecSaveAs(spec, saveas)
+	return
+}
+
 func (cl *Client) AddTorrent(mi *metainfo.MetaInfo) (T *Torrent, err error) {
 	T, _, err = cl.AddTorrentSpec(TorrentSpecFromMetaInfo(mi))
 	return

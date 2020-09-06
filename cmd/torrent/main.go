@@ -156,6 +156,7 @@ func addTorrents(client *torrent.Client) error {
 	for _, arg := range flags.Torrent {
 		t, err := func() (*torrent.Torrent, error) {
 			if strings.HasPrefix(arg, "magnet:") {
+				fmt.Println("url: ", arg)
 				var t *torrent.Torrent
 				var err error
 				if flags.SaveAsName == "" {
