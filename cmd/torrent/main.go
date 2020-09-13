@@ -249,6 +249,7 @@ var flags = struct {
 	Ipv6 bool
 	Pex  bool
 
+	Dbus bool
 	SaveAsName		string	`help:"save download file as name"`
 
 	tagflag.StartPos
@@ -256,7 +257,6 @@ var flags = struct {
 	Torrent []string `arity:"+" help:"torrent file path or magnet uri"`
 	
 }{
-	Seed:		  true,
 	UploadRate:   -1,
 	DownloadRate: -1,
 	Progress:     true,
@@ -309,23 +309,6 @@ const intro = `
 	</interface>` + introspect.IntrospectDataString + `</node> `
 
 func mainErr() error {
-	conn, err := dbus.SessionBus()
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	gBtDbus = &BTDownloadDbus{}
-	fmt.Println("mainErr",gBtDbus)
-	conn.ExportAll(gBtDbus, "/com/gsidv/btdownload", "com.gsidv.btdownload")
-	conn.Export(introspect.Introspectable(intro), "/com/gsidv/btdownload",
-		"org.freedesktop.DBus.Introspectable")
-
-	_, err = conn.RequestName("com.gsidv.btdownload",
-		dbus.NameFlagDoNotQueue)
-	if err != nil {
-		return err
-	}
-
 	var flags struct {
 		tagflag.StartPos
 		Command string
@@ -359,6 +342,26 @@ func downloadErr(args []string, parent *tagflag.Parser) error {
 	clientConfig.PublicIp6 = flags.PublicIP
 	clientConfig.DisablePEX = !flags.Pex
 	clientConfig.DisableWebtorrent = !flags.Webtorrent
+
+	if flags.Dbus {
+		conn, err := dbus.SessionBus()
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		gBtDbus = &BTDownloadDbus{}
+		fmt.Println("dbus running")
+		conn.ExportAll(gBtDbus, "/com/gsidv/btdownload", "com.gsidv.btdownload")
+		conn.Export(introspect.Introspectable(intro), "/com/gsidv/btdownload",
+			"org.freedesktop.DBus.Introspectable")
+
+		_, err = conn.RequestName("com.gsidv.btdownload",
+			dbus.NameFlagDoNotQueue)
+		if err != nil {
+			return err
+		}
+	}
+
 	if flags.PackedBlocklist != "" {
 		blocklist, err := iplist.MMapPackedFile(flags.PackedBlocklist)
 		if err != nil {
