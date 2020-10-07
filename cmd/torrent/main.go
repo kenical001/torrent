@@ -344,7 +344,7 @@ func downloadErr(args []string, parent *tagflag.Parser) error {
 	clientConfig.DisableWebtorrent = !flags.Webtorrent
 
 	if flags.Dbus {
-		conn, err := dbus.SessionBus()
+		conn, err := dbus.SystemBus()
 		if err != nil {
 			return err
 		}
