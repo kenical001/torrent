@@ -36,6 +36,10 @@ import (
 	"encoding/json"
 )
 
+var sLastTime time.Time
+var sBytesCompleted uint64
+var sBytesSpeed uint64
+
 type BTDownloadDbus struct{
 	Torr *torrent.Torrent
 }
@@ -58,6 +62,19 @@ func (btDbus *BTDownloadDbus) GetBtProgress() string {
 	resp := make(map[string]interface{})
 	resp["progress"] = 0.0
 	resp["finish"] = false
+	resp["size"] = length
+	resp["completed"] = bytesCompleted
+	
+	currentTime := time.Now()
+	sub := currentTime.Sub(sLastTime)
+	subSeconds := uint64(sub.Seconds())
+	if subSeconds > 3 || (sBytesSpeed == 0 && subSeconds != 0) {
+		sBytesSpeed = (bytesCompleted - sBytesCompleted) / subSeconds
+		sBytesCompleted = bytesCompleted
+		sLastTime = currentTime
+	}
+
+	resp["speed"] = sBytesSpeed
 	
 	mbsCompleted := float64(bytesCompleted / (1000 * 1000))
 	mbsLength := float64(length / (1000 * 1000))
@@ -168,6 +185,7 @@ func addTorrents(client *torrent.Client) error {
 				if err != nil {
 					return nil, xerrors.Errorf("error adding magnet: %w", err)
 				}
+				sLastTime = time.Now()
 				return t, nil
 			} else if strings.HasPrefix(arg, "http://") || strings.HasPrefix(arg, "https://") {
 				response, err := http.Get(arg)
@@ -294,6 +312,8 @@ func exitSignalHandlers(notify *missinggo.SynchronizedEvent) {
 }
 
 func main() {
+	sLastTime = time.Now()
+	sBytesCompleted = 0
 	if err := mainErr(); err != nil {
 		log.Printf("error in main: %v", err)
 		os.Exit(1)
